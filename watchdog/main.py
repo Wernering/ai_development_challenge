@@ -38,6 +38,7 @@ def _load_and_validate_config() -> dict:
         "error_threshold": _pos_int("ERROR_THRESHOLD", "5"),
         "critical_threshold": _pos_int("CRITICAL_THRESHOLD", "10"),
         "webhook_url": os.getenv("WEBHOOK_URL", "http://localhost:8001/webhook/alert"),
+        "ai_max_samples": _pos_int("AI_ANALYSIS_MAX_SAMPLES", "20"),
     }
 
     if cfg["window_seconds"] <= cfg["poll_interval"]:
@@ -123,7 +124,7 @@ def run() -> None:
                     result = detector.evaluate(session, now)
                 if result:
                     alert_payload, spike_entries = result
-                    ai = analyze_spike(alert_payload, spike_entries)
+                    ai = analyze_spike(alert_payload, spike_entries, cfg["ai_max_samples"])
                     if ai:
                         alert_payload["ai_classification"] = ai.get("classification")
                         alert_payload["ai_root_cause"] = ai.get("root_cause")

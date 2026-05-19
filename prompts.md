@@ -4,6 +4,119 @@
 
 ---
 
+## Turn 32 — 2026-05-19
+
+**Prompt:**
+> Another improvements in AI is the capacity to change models (or provider) and improve the prompts, according to what the client expects.
+
+**Output:**
+- Added 3 new items to `IMPROVEMENTS.md` AI section:
+  - **Provider abstraction** — introduce provider interface (`AI_PROVIDER` env var) to swap Anthropic → OpenAI / Bedrock / Ollama without touching code
+  - **Prompt customization** — externalize system prompt to file, `SYSTEM_PROMPT_PATH` env var, clients tune without Python changes
+  - **Per-environment prompt profiles** — named profiles selectable via env var for staging vs prod
+- Expanded existing "model upgrade path" item to clarify it's a single env var change (`AI_MODEL`)
+
+---
+
+## Turn 30 — 2026-05-19
+
+**Prompt:**
+> Finally, let's add a TODO / IMPROVEMENTS md file that we can fix in the future if we speak with a client who require this repository running in production.
+
+**Output:**
+- Created `IMPROVEMENTS.md` with 5 sections and 24 actionable items:
+  - **Security** — auth, HTTPS, secrets manager, rate limiting, input sanitization
+  - **Infrastructure & Deployment** — Docker/Compose, PostgreSQL migration, data retention, process supervision, CI/CD
+  - **Reliability & Observability** — structured logging, watchdog health check, webhook retry queue, startup validation on all services, graceful shutdown
+  - **Features & UX** — notification channels, dashboard filters/pagination/date range, multi-day backfill, real log ingestion
+  - **AI / Claude** — prompt tuning, token cost monitoring, async AI calls, trend-aware analysis, model upgrade path, circuit breaker
+  - **Testing** — unit tests, integration tests, load test, chaos test
+
+---
+
+## Turn 28 — 2026-05-19
+
+**Prompt:**
+> Every how many minutes does the dashboard update?
+
+**Output:** 30 seconds — `setInterval(loadDashboard, 30000)` in `dashboard/templates/index.html`.
+
+---
+
+## Turn 26 — 2026-05-19
+
+**Prompt:**
+> Let's execute a test with all the services first. For current simplicity, no Anthropic key yet.
+
+**Output:**
+- Started all 4 services as background processes
+- Verified via DB queries and API calls:
+  - Log generator writing to `logs/2026-05-19.log` (2268+ lines)
+  - Watchdog persisted 4523+ entries, fired 13 alerts (latest: HIGH on `scheduler`, 6 errors in 30s window)
+  - Webhook receiver healthy on :8001
+  - Dashboard serving live data on :8002 — 18.8% error rate, 13 alerts
+- AI fields empty as expected (no `ANTHROPIC_API_KEY` set) — graceful degradation confirmed
+
+---
+
+## Turn 24 — 2026-05-19
+
+**Prompt:**
+> We need to define the number of logs sent to the SRE Claude to be configurable in the .env. What do you think?
+> yes, go ahead
+
+**Output:**
+- Added `AI_ANALYSIS_MAX_SAMPLES=20` to `.env`, `.env.example`
+- Updated `watchdog/analyzer.py` — `_build_user_content()` and `analyze_spike()` now accept `max_samples: int = 20` param
+- Updated `watchdog/main.py` — reads `AI_ANALYSIS_MAX_SAMPLES` via `_pos_int()` in config, passes to `analyze_spike()`
+- Added variable to README watchdog table with description
+
+---
+
+## Turn 22 — 2026-05-19
+
+**Prompt:**
+> Let's write down the README.md. It must explain what each of these components do, and how to execute the whole system, so someone else can test it. It must also mention the variables that must be set and what they are for.
+
+**Output:**
+- Created `README.md` with:
+  - Architecture ASCII diagram
+  - Component descriptions (log generator, watchdog, webhook receiver, dashboard)
+  - Setup instructions (prerequisites, `uv sync`, `.env` copy)
+  - Full env var reference table — all 15 variables with defaults and descriptions
+  - Run instructions for all 4 terminals using `uv run`
+  - Tip for triggering alerts manually by lowering thresholds
+  - Project structure tree
+
+---
+
+## Turn 20 — 2026-05-19
+
+**Prompt:**
+> Now, let's create a new GitHub repository and upload the current changes.
+
+**Output:**
+- Created `.gitignore` — excludes `.env`, `data/`, `logs/`, `.venv/`, `__pycache__`
+- `git init` + staged 32 files (secrets and runtime dirs excluded)
+- Initial commit: "Initial MVP: Intelligent Observability & Event Watchdog"
+- Created public GitHub repo via `gh repo create ai_development_challenge`
+- Pushed to `https://github.com/Wernering/ai_development_challenge`
+
+---
+
+## Turn 18 — 2026-05-19
+
+**Prompt:**
+> Let's make a small change before testing. We need to rename the folder ai_development_challenge to "code" and the repository name to ai_development_challenge.
+> (clarification) Just rename the folder — rename the `Wolter Kluwer` parent folder to `ai_development_challenge`.
+
+**Output:**
+- Renamed `Wolter Kluwer/` → `ai_development_challenge/` (parent directory)
+- Project code now lives at `/home/greenghost/Repositories/ai_development_challenge/code/`
+- All relative paths in `.env` unaffected
+
+---
+
 ## Turn 16 — 2026-05-18
 
 **Prompt:**

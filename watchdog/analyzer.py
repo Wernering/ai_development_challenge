@@ -13,14 +13,14 @@ _SYSTEM_PROMPT = (
 )
 
 
-def _build_user_content(alert_payload: dict, log_entries: list) -> str:
+def _build_user_content(alert_payload: dict, log_entries: list, max_samples: int) -> str:
     summary = (
         f"Alert: {alert_payload['severity']} spike — "
         f"{alert_payload['error_count']} errors in {alert_payload['window_seconds']}s "
         f"on service '{alert_payload['source_service']}'."
     )
     samples = []
-    for entry in log_entries[:20]:
+    for entry in log_entries[:max_samples]:
         samples.append({
             "timestamp": entry.timestamp.isoformat(),
             "level": entry.level,
@@ -30,7 +30,7 @@ def _build_user_content(alert_payload: dict, log_entries: list) -> str:
     return f"{summary}\n\nLog samples:\n{json.dumps(samples, indent=2)}"
 
 
-def analyze_spike(alert_payload: dict, log_entries: list) -> dict | None:
+def analyze_spike(alert_payload: dict, log_entries: list, max_samples: int = 20) -> dict | None:
     api_key = os.getenv("ANTHROPIC_API_KEY")
     if not api_key:
         return None
@@ -52,7 +52,7 @@ def analyze_spike(alert_payload: dict, log_entries: list) -> dict | None:
             messages=[
                 {
                     "role": "user",
-                    "content": _build_user_content(alert_payload, log_entries),
+                    "content": _build_user_content(alert_payload, log_entries, max_samples),
                 }
             ],
         )
