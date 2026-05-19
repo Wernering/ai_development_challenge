@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Watchdog Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #f3f4f6; color: #111827; }
+
+    header {
+      background: #1e293b; color: #f8fafc;
+      padding: 16px 32px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    header h1 { font-size: 1.25rem; font-weight: 600; letter-spacing: .02em; }
+    header small { font-size: .8rem; color: #94a3b8; }
+
+    main { max-width: 1200px; margin: 0 auto; padding: 24px 16px; }
+
+    /* KPI */
+    .kpi-row { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+    .kpi-card {
+      flex: 1 1 200px; background: #fff; border-radius: 10px;
+      padding: 20px 24px; box-shadow: 0 1px 3px rgba(0,0,0,.08);
+    }
+    .kpi-value { display: block; font-size: 2rem; font-weight: 700; color: #0f172a; }
+    .kpi-label { display: block; font-size: .8rem; color: #6b7280; margin-top: 4px; text-transform: uppercase; letter-spacing: .05em; }
+
+    /* Chart */
+    .section-card {
+      background: #fff; border-radius: 10px;
+      padding: 20px 24px; box-shadow: 0 1px 3px rgba(0,0,0,.08);
+      margin-bottom: 24px;
+    }
+    .section-card h2 { font-size: .95rem; font-weight: 600; color: #374151; margin-bottom: 16px; }
+    #error-chart { width: 100%; height: 200px; display: block; }
+
+    /* Legend */
+    .chart-legend { display: flex; gap: 16px; margin-top: 8px; }
+    .legend-item { display: flex; align-items: center; gap: 6px; font-size: .75rem; color: #6b7280; }
+    .legend-dot { width: 12px; height: 12px; border-radius: 2px; }
+
+    /* Table */
+    table { width: 100%; border-collapse: collapse; font-size: .875rem; }
+    thead th {
+      background: #f9fafb; padding: 10px 14px;
+      text-align: left; font-size: .75rem; font-weight: 600;
+      color: #6b7280; text-transform: uppercase; letter-spacing: .05em;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    tbody tr { border-bottom: 1px solid #f3f4f6; }
+    tbody tr:hover { background: #f9fafb; }
+    tbody td { padding: 10px 14px; vertical-align: top; }
+    tbody td:nth-child(5) { max-width: 260px; }
+    tbody td:nth-child(6), tbody td:nth-child(7) { max-width: 220px; font-size: .8rem; color: #4b5563; }
+
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 9999px;
+      font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+    }
+    .badge-critical { background: #fee2e2; color: #dc2626; }
+    .badge-high     { background: #fef3c7; color: #d97706; }
+
+    .ai-tag {
+      display: inline-block; font-size: .7rem; font-weight: 600;
+      background: #ede9fe; color: #7c3aed;
+      padding: 1px 6px; border-radius: 4px; margin-right: 4px;
+    }
+
+    .empty-row td { text-align: center; color: #9ca3af; padding: 32px; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Watchdog Dashboard</h1>
+  <small id="last-updated">Loading…</small>
+</header>
+
+<main>
+
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <span class="kpi-value" id="kpi-total-logs">—</span>
+      <span class="kpi-label">Total Logs Processed</span>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-value" id="kpi-total-alerts">—</span>
+      <span class="kpi-label">Total Alerts</span>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-value" id="kpi-alerts-recent">—</span>
+      <span class="kpi-label">Alerts Last {{ lookback_hours }}h</span>
+    </div>
+    <div class="kpi-card">
+      <span class="kpi-value" id="kpi-error-rate">—</span>
+      <span class="kpi-label">Current Error Rate (1h)</span>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <h2>Error Rate — Last 60 Minutes</h2>
+    <canvas id="error-chart"></canvas>
+    <div class="chart-legend">
+      <div class="legend-item"><div class="legend-dot" style="background:#86efac"></div>Clean</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#fbbf24"></div>Errors (below threshold)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#ef4444"></div>Spike (≥ threshold)</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#93c5fd"></div>Warnings</div>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <h2>Recent Alerts</h2>
+    <table id="alert-table">
+      <thead>
+        <tr>
+          <th>Severity</th>
+          <th>Time</th>
+          <th>Service</th>
+          <th>Count</th>
+          <th>Message</th>
+          <th>AI Classification</th>
+          <th>AI Recommendation</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="empty-row"><td colspan="7">Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</main>
+
+<script>
+  const ERROR_THRESHOLD = {{ error_threshold }};
+
+  async function loadDashboard() {
+    await Promise.all([loadStats(), loadAlerts(), loadChart()]);
+    document.getElementById('last-updated').textContent =
+      'Last updated: ' + new Date().toLocaleTimeString();
+  }
+
+  async function loadStats() {
+    try {
+      const data = await fetch('/api/stats').then(r => r.json());
+      if (data.error) return;
+      document.getElementById('kpi-total-logs').textContent =
+        data.total_logs_processed.toLocaleString();
+      document.getElementById('kpi-total-alerts').textContent =
+        data.total_alerts.toLocaleString();
+      document.getElementById('kpi-alerts-recent').textContent =
+        data.alerts_last_x_hours.toLocaleString();
+      const rateEl = document.getElementById('kpi-error-rate');
+      rateEl.textContent = data.current_error_rate_pct.toFixed(1) + '%';
+      rateEl.style.color = data.current_error_rate_pct >= 20 ? '#dc2626'
+        : data.current_error_rate_pct >= 10 ? '#d97706' : '#16a34a';
+    } catch (_) {}
+  }
+
+  async function loadAlerts() {
+    try {
+      const alerts = await fetch('/api/alerts').then(r => r.json());
+      if (!Array.isArray(alerts)) return;
+      const tbody = document.querySelector('#alert-table tbody');
+      tbody.innerHTML = '';
+      if (alerts.length === 0) {
+        tbody.innerHTML = '<tr class="empty-row"><td colspan="7">No alerts yet</td></tr>';
+        return;
+      }
+      alerts.forEach(a => {
+        const tr = document.createElement('tr');
+        const ts = a.timestamp ? new Date(a.timestamp).toLocaleString() : '—';
+        const aiClass = a.ai_classification
+          ? `<span class="ai-tag">AI</span>${escHtml(a.ai_classification)}`
+          : '—';
+        const aiRec = a.ai_recommendation ? escHtml(a.ai_recommendation) : '—';
+        tr.innerHTML =
+          `<td><span class="badge badge-${a.severity.toLowerCase()}">${escHtml(a.severity)}</span></td>` +
+          `<td>${ts}</td>` +
+          `<td>${escHtml(a.source_service)}</td>` +
+          `<td>${a.error_count}</td>` +
+          `<td>${escHtml(a.message)}</td>` +
+          `<td>${aiClass}</td>` +
+          `<td>${aiRec}</td>`;
+        tbody.appendChild(tr);
+      });
+    } catch (_) {}
+  }
+
+  async function loadChart() {
+    try {
+      const data = await fetch('/api/error-rate').then(r => r.json());
+      if (!Array.isArray(data)) return;
+      drawChart(data);
+    } catch (_) {}
+  }
+
+  function drawChart(data) {
+    const canvas = document.getElementById('error-chart');
+    canvas.width = canvas.offsetWidth || 900;
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    const PAD = { top: 12, right: 24, bottom: 44, left: 44 };
+    const cW = W - PAD.left - PAD.right;
+    const cH = H - PAD.top - PAD.bottom;
+
+    ctx.clearRect(0, 0, W, H);
+
+    const maxVal = Math.max(
+      ...data.map(d => d.error_count + d.critical_count + d.warning_count), 1
+    );
+    const barW = cW / data.length;
+
+    data.forEach((bucket, i) => {
+      const errTotal = bucket.error_count + bucket.critical_count;
+      const x = PAD.left + i * barW;
+
+      // warning bar (stacked behind, lighter)
+      if (bucket.warning_count > 0) {
+        const wH = Math.max(1, (bucket.warning_count / maxVal) * cH);
+        ctx.fillStyle = '#bfdbfe';
+        ctx.fillRect(x + 1, PAD.top + cH - wH, barW - 2, wH);
+      }
+
+      // error bar (on top)
+      if (errTotal > 0) {
+        const eH = Math.max(1, (errTotal / maxVal) * cH);
+        ctx.fillStyle = errTotal >= ERROR_THRESHOLD ? '#ef4444' : '#fbbf24';
+        ctx.fillRect(x + 1, PAD.top + cH - eH, barW - 2, eH);
+      } else if (bucket.warning_count === 0) {
+        ctx.fillStyle = '#bbf7d0';
+        ctx.fillRect(x + 1, PAD.top + cH - 2, barW - 2, 2);
+      }
+
+      // x-axis label every 10 buckets
+      if (i % 10 === 0) {
+        const label = bucket.bucket_time.slice(11, 16);
+        ctx.fillStyle = '#9ca3af';
+        ctx.font = '11px system-ui, sans-serif';
+        ctx.fillText(label, x - 6, PAD.top + cH + 16);
+      }
+    });
+
+    // axes
+    ctx.strokeStyle = '#e5e7eb';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(PAD.left, PAD.top);
+    ctx.lineTo(PAD.left, PAD.top + cH);
+    ctx.lineTo(PAD.left + cW, PAD.top + cH);
+    ctx.stroke();
+
+    // y-axis labels
+    ctx.fillStyle = '#9ca3af';
+    ctx.font = '11px system-ui, sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText(maxVal, PAD.left - 6, PAD.top + 6);
+    ctx.fillText('0', PAD.left - 6, PAD.top + cH + 1);
+    ctx.textAlign = 'left';
+
+    // threshold dashed line
+    const ty = PAD.top + cH - (ERROR_THRESHOLD / maxVal) * cH;
+    if (ty > PAD.top && ty < PAD.top + cH) {
+      ctx.save();
+      ctx.strokeStyle = '#f87171';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([5, 5]);
+      ctx.beginPath();
+      ctx.moveTo(PAD.left, ty);
+      ctx.lineTo(PAD.left + cW, ty);
+      ctx.stroke();
+      ctx.restore();
+      ctx.fillStyle = '#f87171';
+      ctx.font = '10px system-ui, sans-serif';
+      ctx.fillText('threshold (' + ERROR_THRESHOLD + ')', PAD.left + cW - 100, ty - 4);
+    }
+  }
+
+  function escHtml(s) {
+    if (!s) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  document.addEventListener('DOMContentLoaded', loadDashboard);
+  setInterval(loadDashboard, 30000);
+</script>
+
+</body>
+</html>

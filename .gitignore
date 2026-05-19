@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environment
+.venv/
+
+# Environment / secrets
+.env
+
+# Project runtime data
+data/
+logs/
+
+# uv
+.uv/
