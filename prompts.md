@@ -4,6 +4,41 @@
 
 ---
 
+## Turn 36 — 2026-05-19
+
+**Prompt:**
+> Finally, we will write in the README all the assumptions we had in consideration for the development of this repository. Mainly is the use of JSON logs (easier to parse), different components (to emulate microservices that could be scaled or replaced), a dashboard showing the trends using simple HTML. Do you remember any other assumption?
+
+**Output:**
+- Added "Design Assumptions" section to `README.md` with 13 documented decisions:
+  1. JSON / NDJSON log format — easier to parse, maps to DB columns, swappable
+  2. Separate components emulating microservices — independently scalable/replaceable
+  3. Plain HTML dashboard — no build step, easy to replace, `/api/*` is the stable contract
+  4. SQLite as shared database — zero infra, ORM makes migration to PostgreSQL trivial
+  5. Simulated log generator — weighted random (INFO 55 / WARNING 25 / ERROR 16 / CRITICAL 4)
+  6. Statistical spike detection, not ML — deterministic, auditable; AI is classification layer on top
+  7. Rolling window > poll interval — startup-enforced to guarantee no coverage gaps
+  8. Only ERROR + CRITICAL count toward spikes — INFO/WARNING treated as noise
+  9. Alert cooldown = rolling window duration — prevents alert storms from sustained spikes
+  10. Fire-and-forget webhook with one retry — keeps poll loop unblocked
+  11. Single `.env` shared across all services — simplifies local dev
+  12. Claude Haiku for AI — cost/latency efficiency; model configurable for production
+  13. All services on localhost — no TLS/auth/isolation for MVP
+
+---
+
+## Turn 34 — 2026-05-19
+
+**Prompt:**
+> Let's commit and push.
+
+**Output:**
+- Committed and pushed: README.md, IMPROVEMENTS.md, `.env.example`, `watchdog/analyzer.py`, `watchdog/main.py`, `prompts.md`
+- Commit: `docs: add README and IMPROVEMENTS; make AI sample count configurable`
+- Pushed to `https://github.com/Wernering/ai_development_challenge`
+
+---
+
 ## Turn 32 — 2026-05-19
 
 **Prompt:**

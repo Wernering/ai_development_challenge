@@ -4,6 +4,51 @@ SRE tool that monitors application logs for error spikes, fires webhook alerts, 
 
 ---
 
+## Design Assumptions
+
+These decisions were made deliberately for the MVP. See `IMPROVEMENTS.md` for how each can be evolved for production.
+
+**Log format — JSON (NDJSON)**
+Each log entry is a single JSON object per line. Structured logs are easier to parse reliably than plain-text formats and map directly to typed database columns without regex. Makes it straightforward to swap the simulated generator for a real log shipper later.
+
+**Separate components emulating microservices**
+Log generator, watchdog, webhook receiver, and dashboard run as independent processes. This mirrors a real microservices architecture where each component can be scaled, replaced, or redeployed independently. Stopping one does not crash the others.
+
+**Plain HTML dashboard**
+No JS framework, no build step, no external CSS. Easy to spin up, easy to inspect, and easy to replace with a more capable frontend (React, Grafana, etc.) once requirements are clearer. The `/api/*` JSON endpoints are the stable contract — the UI is just a thin consumer of them.
+
+**SQLite as the shared database**
+Single file, zero infrastructure. All four services share one `data/watchdog.db`. Acceptable for a local MVP and easy to reason about. The SQLAlchemy ORM means migrating to PostgreSQL is a connection string change.
+
+**Simulated log generator**
+No real application to instrument. A weighted random generator (INFO 55% / WARNING 25% / ERROR 16% / CRITICAL 4%) approximates realistic production log distribution. Designed to be replaced with a real log shipper (Fluentd, Vector) without changes to the watchdog.
+
+**Statistical spike detection, not ML**
+Thresholds and rolling windows are simple, explainable, and tuneable via env vars. Claude AI is layered on top for classification and root cause analysis — not used as the detection mechanism itself. This keeps the core alerting logic deterministic and auditable.
+
+**Rolling window must exceed poll interval**
+Enforced at startup. Guarantees that consecutive polls always overlap in time, so no log entry can fall between two polling windows and be missed in threshold evaluation.
+
+**Only ERROR + CRITICAL count toward spikes**
+INFO and WARNING are treated as noise for spike detection. WARNING frequency alone is not an indicator of an actionable incident; ERROR and CRITICAL are.
+
+**Alert cooldown equals rolling window duration**
+Once an alert fires, the watchdog suppresses re-alerting for the same duration as the rolling window. Prevents alert storms from a sustained spike flooding the webhook receiver.
+
+**Fire-and-forget webhook with one retry**
+Alert delivery is best-effort: one retry on connection error, then the watchdog logs the failure and continues. Keeps the poll loop unblocked. A persistent retry queue is listed in `IMPROVEMENTS.md`.
+
+**Single `.env` file shared across all services**
+All services read from the same `.env` at the project root. Simplifies local development — one place to change config. In production each service would receive only the env vars it needs.
+
+**Claude Haiku for AI analysis**
+Chosen for low latency and cost efficiency at the MVP stage. The model name is configurable via `AI_MODEL` (see `IMPROVEMENTS.md`) so operators can upgrade to Sonnet or Opus, or swap providers entirely.
+
+**All services bind to localhost**
+No TLS, no authentication, no network isolation. Appropriate for local development and demos. Production deployment would run each service in its own container behind a reverse proxy.
+
+---
+
 ## Architecture
 
 ```
